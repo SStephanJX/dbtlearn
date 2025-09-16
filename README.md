@@ -72,28 +72,28 @@ This project leverages the power of dbt's package ecosystem:
 
 ## 📁 Project Structure
 ├── models/
-│ ├── staging/ # Source models
+│ ├── staging/
 │ │ ├── src_hosts.sql
 │ │ ├── src_listings.sql
 │ │ ├── src_reviews.sql
-│ │ └── sources.yml # Defines the raw source tables
-│ ├── dim/ # Dimension models
+│ │ └── sources.yml
+│ ├── dim/
 │ │ ├── dim_hosts_cleansed.sql
 │ │ ├── dim_listings_cleansed.sql
 │ │ └── dim_listings_w_hosts.sql
-│ ├── fct/ # Fact models
+│ ├── fct/
 │ │ └── fct_reviews.sql
-│ └── mart/ # Data marts
+│ └── mart/
 │ └── mart_fullmoon_reviews.sql
-├── seeds/ # Static data files
+├── seeds/
 │ └── full_moon_dates.csv
-├── snapshots/ # Slowly Changing Dimensions (SCDs)
+├── snapshots/
 │ └── scd_raw_hosts.sql
-├── macros/ # Custom Jinja macros
-├── tests/ # Custom data tests
-├── analysis/ # Ad-hoc analysis queries
-├── dbt_project.yml # Main configuration file
-└── packages.yml # Defines dbt utility packages
+├── macros/
+├── tests/
+├── analysis/
+├── dbt_project.yml
+└── packages.yml
 
 
 ## 🚀 Getting Started

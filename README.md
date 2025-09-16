@@ -71,29 +71,33 @@ This project leverages the power of dbt's package ecosystem:
 -   **`dbt_date`** (Suggested): Useful for date spine generation and advanced date logic, complementing time-based analysis.
 
 ## 📁 Project Structure
-├── models/
-│ ├── staging/
-│ │ ├── src_hosts.sql
-│ │ ├── src_listings.sql
-│ │ ├── src_reviews.sql
-│ │ └── sources.yml
-│ ├── dim/
-│ │ ├── dim_hosts_cleansed.sql
-│ │ ├── dim_listings_cleansed.sql
-│ │ └── dim_listings_w_hosts.sql
-│ ├── fct/
-│ │ └── fct_reviews.sql
-│ └── mart/
-│ └── mart_fullmoon_reviews.sql
-├── seeds/
-│ └── full_moon_dates.csv
-├── snapshots/
-│ └── scd_raw_hosts.sql
-├── macros/
-├── tests/
-├── analysis/
-├── dbt_project.yml
-└── packages.yml
+
+<pre>
+dbtlearn/
+├── 📂 models/
+│   ├── 📂 staging/          # Source models
+│   │   ├── src_hosts.sql
+│   │   ├── src_listings.sql
+│   │   ├── src_reviews.sql
+│   │   └── sources.yml      # Defines the raw source tables
+│   ├── 📂 dim/              # Dimension models
+│   │   ├── dim_hosts_cleansed.sql
+│   │   ├── dim_listings_cleansed.sql
+│   │   └── dim_listings_w_hosts.sql
+│   ├── 📂 fct/              # Fact models
+│   │   └── fct_reviews.sql
+│   └── 📂 mart/             # Data marts
+│       └── mart_fullmoon_reviews.sql
+├── 📂 seeds/                # Static data files
+│   └── full_moon_dates.csv
+├── 📂 snapshots/            # Slowly Changing Dimensions (SCDs)
+│   └── scd_raw_hosts.sql
+├── 📂 macros/               # Custom Jinja macros
+├── 📂 tests/                # Custom data tests
+├── 📂 analysis/             # Ad-hoc analysis queries
+├── dbt_project.yml          # Main configuration file
+└── packages.yml             # Defines dbt utility packages
+</pre>
 
 
 ## 🚀 Getting Started

@@ -1,0 +1,192 @@
+version: 2
+
+models:
+  - name: dim_listings_cleansed
+    description: |
+      # Cleansed Listings Dimension Table
+      This is the core dimension table for analyzing Airbnb property listings. It provides a clean, reliable view of listing attributes like room type, price, and host information, ready for analytics.
+      - **Source:** Raw `listings` table, cleansed and standardized.
+      - **Granularity:** One row per unique Airbnb listing.
+      - **Used For:** Joining to `fct_reviews` for analysis, powering dashboards on listing performance.
+    meta:
+      owner: "stephen.stephan"
+      domain: "listings"
+      freshness: "daily"
+    columns:
+      - name: listing_id
+        description: Primary key for the listing
+        tests:
+          - unique
+          - not_null
+
+      - name: host_id
+        description: The host's ID. References the host table.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hosts_cleansed')
+              field: host_id
+
+      - name: room_type
+        description: |
+          The category of rental space offered. Categorized from raw data into our four official types: 'Entire home/apt', 'Private room', 'Shared room', 'Hotel room'.
+          **Business Rule:** This field is used to segment pricing and occupancy analysis.
+        tests:
+          - accepted_values:
+              values: ['Entire home/apt', 'Private room', 'Shared room', 'Hotel room']
+
+      - name: minimum_nights
+        description: '{{ doc("dim_listing_cleansed__minimum_nights") }}'
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 365
+
+  - name: dim_hosts_cleansed
+    description: |
+      # Cleansed Hosts Dimension Table
+      This table provides a trusted view of all Airbnb hosts, central to analyzing host performance and activity. It is cleansed and ready for joining to listing data.
+      - **Source:** Raw `hosts` table, cleansed and standardized.
+      - **Granularity:** One row per unique host.
+      - **Used For:** Analyzing host performance, superhost status, and joining to `dim_listings_cleansed`.
+    meta:
+      owner: "stephen.stephan"
+      domain: "hosts"
+      freshness: "weekly"
+    columns:
+      - name: host_id
+        description: |
+          The unique identifier for a host. This is the primary key for this table and a foreign key in the `dim_listings_cleansed` table.
+        tests:
+          - not_null
+          - unique
+
+      - name: host_name
+        description: |
+          The name of the host as displayed on their Airbnb profile.
+          **Note:** In the raw data, this field occasionally contains placeholder or non-sensical values which have been filtered out during cleansing.
+        tests:
+          - not_null
+
+      - name: is_superhost
+        description: |
+          A boolean flag (TRUE/'t' or FALSE/'f') indicating if the host has been granted Superhost status by Airbnb based on their performance metrics.
+          **Business Significance:** Superhosts often have higher visibility and booking rates on the platform.
+        tests:
+          - accepted_values:
+              values: ['t', 'f']
+
+  - name: dim_listings_w_hosts
+    description: |
+      # Core Mart Table: Listings with Host Details
+      This is a wide table that joins cleansed listing information with host details to create a central, analytics-ready dataset. It is the primary table used for most business dashboards and analyses.
+      - **Source:** Join between `dim_listings_cleansed` and `dim_hosts_cleansed`.
+      - **Granularity:** One row per unique Airbnb listing.
+      - **Business Purpose:** Enables analysis of listing performance (e.g., price, availability) enriched with host attributes (e.g., superhost status).
+    meta:
+      owner: "stephen.stephan"
+      domain: "listings"
+      freshness: "daily"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_equal_other_table:
+          compare_model: source('airbnb', 'listings')
+    columns:
+      - name: listing_id
+        description: |
+          Primary key. The unique identifier for the Airbnb listing. Foreign key to `dim_listings_cleansed`.
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('dim_listings_cleansed')
+              field: listing_id
+
+      - name: host_id
+        description: |
+          The unique identifier for the host of this listing. Foreign key to `dim_hosts_cleansed`.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hosts_cleansed')
+              field: host_id
+
+      - name: host_name
+        description: |
+          The name of the host for this listing. Used for reporting and stakeholder-facing dashboards.
+        tests:
+          - not_null
+
+      - name: is_superhost
+        description: |
+          Indicates if the host of this listing has Superhost status. A key metric for analyzing premium listing performance.
+        tests:
+          - accepted_values:
+              values: ['t', 'f']
+
+      - name: room_type
+        description: |
+          The category of the rental space (e.g., 'Entire home/apt', 'Private room'). A primary dimension for segmenting analysis.
+        tests:
+          - accepted_values:
+              values: ['Entire home/apt', 'Private room', 'Shared room', 'Hotel room']
+
+      - name: price
+        description: |
+          The nightly price for the listing, stored as a numeric value (e.g., 99.99).
+          **Note:** This is the cleaned and standardized price from the raw data. Values are in USD.
+          **Business Rule:** Used as a key metric for pricing strategy and revenue analysis.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: numeric
+          - dbt_expectations.expect_column_quantile_values_to_be_between:
+              quantile: .99
+              min_value: 50
+              max_value: 500
+          - dbt_expectations.expect_column_max_to_be_between:
+              max_value: 5000
+              config:
+                severity: warn
+
+  - name: fct_reviews
+    description: |
+      # Fact Table: Customer Reviews
+      This fact table records customer reviews, enabling analysis of customer satisfaction and feedback trends. It is the foundation for review sentiment dashboards.
+      - **Source:** Raw `reviews` table, likely enriched with a sentiment score from an NLP process.
+      - **Grain:** One row per review.
+      - **Business Purpose:** Tracking customer feedback volume and sentiment trends for listings.
+    meta:
+      owner: "stephen.stephan"
+      domain: "reviews"
+      freshness: "daily"
+    columns:
+      - name: review_id
+        description: Surrogate key generated from listing_id, review_date, reviewer_name, and review_text.
+        tests:
+          - unique
+          - not_null
+
+      - name: listing_id
+        description: |
+          Foreign key that connects this review to the corresponding listing in the `dim_listings_cleansed` table. This is used to analyze reviews per property.
+        tests:
+          - relationships:
+              to: ref('dim_listings_cleansed')
+              field: listing_id
+
+      - name: reviewer_name
+        description: |
+          The name of the guest who submitted the review, as displayed on Airbnb.
+          **Data Note:** This field is a required part of a submitted review.
+        tests:
+          - not_null
+
+      - name: review_sentiment
+        description: |
+          The classified sentiment of the review text (e.g., from an NLP process).
+          - **'positive'**: Contains strong positive language and recommendations.
+          - **'neutral'**: Contains factual statements without strong emotional language.
+          - **'negative'**: Contains strong criticism or negative feedback.
+          **Business Rule:** This field powers the "Customer Satisfaction" KPI dashboard.
+        tests:
+          - accepted_values:
+              values: ['positive', 'neutral', 'negative']

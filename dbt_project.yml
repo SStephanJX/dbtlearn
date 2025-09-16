@@ -1,0 +1,35 @@
+name: 'dbtlearn'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dbtlearn'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+asset-paths: ["assets"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dbtlearn:
+    +materialized: view
+    +post-hook:
+      - "GRANT SELECT ON {{ this }} TO ROLE REPORTER"
+    
+    src:
+      +materialized: ephemeral
+    
+    dim:
+      +materialized: table
+    
+    fct:
+      +materialized: incremental
+vars:
+  user_name: default_user_for_this_project

@@ -1,0 +1,186 @@
+DBTLEARN
+Models:
+folders: 
+dim:
+dim_hosts_cleansed.sql
+{{ 
+    config(
+        materialized='view'
+        )
+}}
+
+WITH src_hosts AS (
+    SELECT 
+        * 
+    FROM 
+        {{  ref('src_hosts')}}
+)
+SELECT
+    host_id,
+    NVL(
+        host_name, 
+        'Anonymous'
+    ) AS host_name,
+   is_superhost,
+    created_at,
+    updated_at
+FROM 
+    src_hosts
+dim_listings_cleansed.sql
+{{ 
+    config(
+        materialized='view'
+        ) 
+}}
+
+WITH src_listings AS (
+    SELECT * FROM {{ ref('src_listings') }}
+)
+
+SELECT
+    listing_id,
+    listing_name,
+    room_type,
+    CASE
+        WHEN minimum_nights = 0 THEN 1
+        ELSE minimum_nights
+    END AS minimum_nights,
+    host_id,
+    REPLACE(price_str, '$', '')::NUMBER(10, 2) AS price,
+    created_at,
+    updated_at
+FROM src_listings
+dim_listings_w_hosts.sql
+{{ 
+    config(
+        materialized='table'
+        ) 
+}}
+WITH
+l AS (
+    SELECT
+        *
+    FROM
+        {{ ref('dim_listings_cleansed') }}
+),
+h AS (
+    SELECT 
+        *
+    FROM 
+        {{ ref('dim_hosts_cleansed') }}
+)
+SELECT
+    l.listing_id,
+    l.listing_name,
+    l.room_type,
+    l.minimum_nights,
+    l.price,
+    l.host_id,
+    h.host_name,
+    h.is_superhost as host_is_superhost,
+    l.created_at,
+    GREATEST(l.updated_at, h.updated_at) as updated_at
+FROM l
+LEFT JOIN h ON (h.host_id = l.host_id)
+fct:
+fct_reviews.sql
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail'
+    )
+}}
+
+WITH src_reviews AS (
+  SELECT * FROM {{ ref('src_reviews') }}
+)
+SELECT 
+  {{ dbt_utils.generate_surrogate_key(['listing_id', 'review_date', 'reviewer_name', 'review_text']) }} as review_id,
+  *
+FROM src_reviews
+WHERE review_text is not null
+{% if is_incremental() %}
+  {% if var("start_date", False) and var("end_date", False) %}
+    {{ log('Loading ' ~ this ~ ' incrementally (start_date: ' ~ var("start_date") ~ ', end_date: ' ~ var("end_date") ~ ')', info=True) }}
+    AND review_date >= '{{ var("start_date") }}'
+    AND review_date < '{{ var("end_date") }}'
+  {% else %}
+    AND review_date > (select max(review_date) from {{ this }})
+    {{ log('Loading ' ~ this ~ ' incrementally (all missing dates)', info=True)}}
+  {% endif %}
+{% endif %}
+mart:
+mart_fullmoon_reviews.sql
+{{ config(
+materialized = 'table',
+) }}
+
+WITH fct_reviews AS (
+SELECT * FROM {{ ref('fct_reviews') }}
+),
+full_moon_dates AS (
+SELECT * FROM {{ ref('seed_full_moon_dates') }}
+)
+
+SELECT
+r.*,
+CASE
+WHEN fm.full_moon_date IS NULL THEN 'not full moon'
+ELSE 'full moon'
+END AS is_full_moon
+FROM
+fct_reviews
+r
+LEFT JOIN full_moon_dates
+fm
+ON (TO_DATE(r.review_date) = DATEADD(DAY, 1, fm.full_moon_date))
+src:
+src_hosts.sql
+{{ config(materialized='ephemeral') }}
+WITH raw_hosts AS (
+    SELECT  
+        *  
+    FROM AIRBNB.RAW.RAW_HOSTS
+)
+
+SELECT  
+    id AS host_id,
+    name AS host_name,
+    is_superhost,
+    created_at,
+    updated_at
+FROM raw_hosts
+src_listings.sql
+{{ config(materialized='ephemeral') }}
+WITH raw_listings AS (
+    SELECT * FROM AIRBNB.RAW.RAW_LISTINGS
+)
+SELECT
+    id AS listing_id,
+    name as listing_name,
+    listing_url,
+    room_type,
+    minimum_nights,
+    host_id,
+    price AS price_str,
+    created_at,
+    updated_at 
+FROM
+    raw_listings
+src_reviews.sql
+{{ config(materialized='ephemeral') }}
+WITH raw_reviews AS (
+    SELECT 
+        * 
+    FROM 
+        AIRBNB.RAW.RAW_REVIEWS
+)
+SELECT 
+    listing_id,
+    date AS review_date,
+    reviewer_name,
+    comments AS review_text,
+    sentiment AS review_sentiment
+FROM 
+    AIRBNB.RAW.RAW_REVIEWS
+
